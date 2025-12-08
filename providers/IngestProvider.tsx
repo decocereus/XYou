@@ -11,6 +11,7 @@ import {
 } from "react";
 import { useIngestJob } from "@/lib/useIngestJob";
 import type { IngestRequest } from "@/lib/backend-schemas";
+import { TranscribeTranscriptResponseSchema } from "@/lib/backend-schemas";
 
 export type ThreadResult = {
   summary?: string[];
@@ -47,7 +48,7 @@ type IngestContextValue = {
   genError: string | null;
   genLoading: boolean;
   generateThreads: () => Promise<void>;
-  downloadTranscript: () => void;
+  downloadTranscript: () => Promise<void>;
   resetThreads: () => void;
   statusColor: typeof statusColor;
 };
@@ -88,8 +89,11 @@ export function IngestProvider({
     await submit({
       url,
       quality,
+      mediaType: "audio",
       audioOnly: true,
       downloadVideo: false,
+      preferMp4: true,
+      concurrentFragments: 8,
       gcsGzip: true,
       gcsValidation: false,
       gcsChunkSizeMb: 8,
@@ -99,19 +103,33 @@ export function IngestProvider({
   }, [submit, url, quality]);
 
   const generateThreads = useCallback(async () => {
-    if (!job?.transcript?.signedUrl) {
-      setGenError("Transcript not available yet.");
-      return;
-    }
     setGenError(null);
     setGenLoading(true);
     try {
+      let workingTranscript = transcript;
+
+      if (!workingTranscript && job?.id) {
+        const res = await fetch(
+          `/api/transcript/${encodeURIComponent(job.id)}?format=transcript`
+        );
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json?.error || "Transcript not available yet");
+        }
+        const parsed = TranscribeTranscriptResponseSchema.parse(json);
+        workingTranscript = parsed;
+      }
+
+      if (!workingTranscript) {
+        throw new Error("Transcript not available yet.");
+      }
+
       const res = await fetch("/api/generate-threads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          transcriptUrl: job.transcript.signedUrl,
-          segments: job.transcript.segments,
+          transcript: workingTranscript.text,
+          segments: workingTranscript.segments,
         }),
       });
       if (!res.ok) {
@@ -124,19 +142,39 @@ export function IngestProvider({
     } finally {
       setGenLoading(false);
     }
-  }, [job?.transcript?.signedUrl, job?.transcript?.segments]);
+  }, [job?.id, transcript]);
 
-  const downloadTranscript = useCallback(() => {
-    const transcriptUrl = job?.transcript?.signedUrl;
-    if (!transcriptUrl) return;
+  const downloadTranscript = useCallback(async () => {
+    let workingTranscript = transcript;
 
+    if (!workingTranscript && job?.id) {
+      try {
+        const res = await fetch(
+          `/api/transcript/${encodeURIComponent(job.id)}?format=transcript`
+        );
+        const json = await res.json();
+        if (res.ok) {
+          workingTranscript = TranscribeTranscriptResponseSchema.parse(json);
+        }
+      } catch (e) {
+        console.error("Failed to fetch transcript", e);
+      }
+    }
+
+    const content =
+      workingTranscript?.text ||
+      workingTranscript?.segments?.map((seg) => seg.text).join("\n") ||
+      "";
+    if (!content) return;
+
+    const blob = new Blob([content], { type: "text/plain" });
+    const urlObj = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.href = transcriptUrl;
-    link.target = "_blank";
-    link.rel = "noopener";
+    link.href = urlObj;
     link.download = "transcript.txt";
     link.click();
-  }, [job?.transcript?.signedUrl]);
+    URL.revokeObjectURL(urlObj);
+  }, [job?.id, transcript]);
 
   const resetThreads = useCallback(() => {
     setThreads(null);
@@ -147,12 +185,13 @@ export function IngestProvider({
     if (status === "success" && jobId) {
       fetchJobStatus(jobId);
     }
-  }, [jobId, status]);
+  }, [fetchJobStatus, jobId, status]);
 
   useEffect(() => {
-    if (status === "success" && job?.id && job?.media?.signedUrl) {
+    if (status === "success" && job?.id) {
       startTranscription({
-        url: job.media.signedUrl,
+        videoId: job.videoId || job.id,
+        mediaType: job.media?.mediaType ?? "audio",
         formatAs: "transcript",
       });
     }

@@ -8,14 +8,12 @@ export function TranscriptActions() {
     status,
     transcriptStatus,
     transcriptError,
-    job,
     downloadTranscript,
     transcript,
   } = useIngest();
-  console.log("JOB", job);
 
   const transcriptReady =
-    status === "success" && !!job?.transcript?.signedUrl && !transcriptError;
+    status === "success" && transcriptStatus !== "pending" && !transcriptError;
 
   if (!status && transcriptStatus === "idle") return null;
 

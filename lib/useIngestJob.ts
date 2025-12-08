@@ -209,14 +209,16 @@ export function useIngestJob() {
       setTranscriptError(null);
       transcribeStartedForRef.current = null;
       try {
-        const infoResult = await fetch(
-          `/api/info?url=${encodeURIComponent(body.url)}`
-        );
-        const infoJson = await readJson(infoResult);
-        if (!infoResult.ok) {
-          throw new Error(infoJson?.error || "info_failed");
+        if (body.url) {
+          const infoResult = await fetch(
+            `/api/info?url=${encodeURIComponent(body.url)}`
+          );
+          const infoJson = await readJson(infoResult);
+          if (!infoResult.ok) {
+            throw new Error(infoJson?.error || "info_failed");
+          }
+          setInfo(InfoResponseSchema.parse(infoJson));
         }
-        setInfo(InfoResponseSchema.parse(infoJson));
 
         const ingestResult = await fetch("/api/ingest", {
           method: "POST",
@@ -245,6 +247,8 @@ export function useIngestJob() {
   const startTranscription = useCallback(
     async (opts: {
       url?: string;
+      videoId?: string;
+      mediaType?: "audio" | "video";
       formatAs?: "transcript" | "subtitles";
       language?: string;
     }) => {
@@ -256,9 +260,9 @@ export function useIngestJob() {
         return;
       }
 
-      if (!opts.url) {
+      if (!opts.url && !opts.videoId) {
         setTranscriptStatus("error");
-        setTranscriptError("Missing audio URL for transcription");
+        setTranscriptError("Missing media identifier for transcription");
         return;
       }
 
@@ -273,6 +277,8 @@ export function useIngestJob() {
           },
           body: JSON.stringify({
             url: opts.url,
+            videoId: opts.videoId,
+            mediaType: opts.mediaType,
             formatAs: format,
             language: opts.language,
           }),

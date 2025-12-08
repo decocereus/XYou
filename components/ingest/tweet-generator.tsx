@@ -4,21 +4,13 @@ import { useIngest } from "@/providers/IngestProvider";
 import { Button, Card, Separator, Text } from "@whop/react/components";
 
 export function TweetGenerator() {
-  const {
-    job,
-    status,
-    transcriptStatus,
-    genLoading,
-    genError,
-    generateThreads,
-  } = useIngest();
+  const { status, transcriptStatus, genLoading, genError, generateThreads } =
+    useIngest();
 
   const transcriptReady =
-    status === "success" &&
-    transcriptStatus === "success" &&
-    !!job?.transcript?.signedUrl;
+    status === "success" && transcriptStatus !== "pending";
 
-  if (!job?.transcript?.signedUrl && status !== "success") return null;
+  if (!status && transcriptStatus === "idle") return null;
 
   return (
     <Card variant="classic" size="4" className="space-y-3">
