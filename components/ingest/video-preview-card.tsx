@@ -1,7 +1,8 @@
 "use client";
 
 import { useIngest } from "@/providers/IngestProvider";
-import { Card, Inset, Text, Theme } from "@whop/react/components";
+import { Card, Inset, Text } from "@whop/react/components";
+import { motion } from "framer-motion";
 
 export function VideoPreviewCard() {
   const { info } = useIngest();
@@ -9,30 +10,54 @@ export function VideoPreviewCard() {
   if (!info) return null;
 
   return (
-    <Card variant="surface" className="relative p-0!">
-      {info.thumbnail && (
-        <Inset clip="border-box" side="all">
-          <img
-            src={info.thumbnail}
-            alt="thumbnail"
-            className="h-full w-full object-cover"
-          />
-        </Inset>
-      )}
-      <Theme accentColor="crimson" appearance="dark">
-        <div className="absolute inset-0 flex flex-col justify-end gap-2 bg-gradient-to-t from-black/70 via-black/30 to-transparent p-4">
-          <Text size="5" weight="semi-bold">
+    <motion.div
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="w-full max-w-2xl mx-auto"
+    >
+      <Card
+        variant="classic"
+        size="2"
+        className="relative p-0  border-0 shadow-xl group"
+      >
+        {info.thumbnail && (
+          <Inset
+            clip="border-box"
+            side="all"
+            className="aspect-video bg-black/50"
+          >
+            <img
+              src={info.thumbnail}
+              alt="thumbnail"
+              className="h-full w-full  object-cover opacity-90 group-hover:opacity-100 transition-opacity duration-700"
+            />
+          </Inset>
+        )}
+        <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent z-20">
+          <Text
+            size="3"
+            weight="bold"
+            className="text-white line-clamp-2 leading-tight"
+          >
             {info.title}
           </Text>
-          <Text color="gray" size="3">
-            {info.durationSeconds
-              ? `${Math.round(info.durationSeconds / 60)} min`
-              : "Duration n/a"}
-            {info.ext ? ` • ${info.ext}` : ""}
-            {info.uploader ? ` • ${info.uploader}` : ""}
-          </Text>
+          <div className="flex items-center gap-2 mt-1">
+            <Text size="1" className="text-gray-300">
+              {info.uploader}
+            </Text>
+            <span className="w-1 h-1 rounded-full bg-gray-400" />
+            <Text size="1" className="text-gray-300">
+              {info.durationSeconds
+                ? `${Math.floor(info.durationSeconds / 60)}:${(
+                    info.durationSeconds % 60
+                  )
+                    .toString()
+                    .padStart(2, "0")}`
+                : "N/A"}
+            </Text>
+          </div>
         </div>
-      </Theme>
-    </Card>
+      </Card>
+    </motion.div>
   );
 }

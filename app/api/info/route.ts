@@ -4,6 +4,8 @@ import { AllowedUrlSchema, InfoResponseSchema } from "@/lib/backend-schemas";
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 const API_KEY = process.env.API_KEY;
 
+console.log("BACKEND_URL", BACKEND_URL);
+
 export async function GET(req: Request) {
   if (!BACKEND_URL || !API_KEY) {
     return NextResponse.json(

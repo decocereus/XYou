@@ -76,7 +76,7 @@ export function useIngestJob() {
     }
   };
 
-  const fetchJobStatus = async (id: string) => {
+  const fetchJobStatus = useCallback(async (id: string) => {
     try {
       const res = await fetch(`/api/jobs/${encodeURIComponent(id)}`);
       const payload = await readJson(res);
@@ -94,28 +94,31 @@ export function useIngestJob() {
       console.error("Error polling Job", error);
       toast.error((error as Error)?.message || "Job polling failed");
     }
-  };
-
-  const poll = useCallback(async (id: string, attempt = 0) => {
-    try {
-      const res = await fetchJobStatus(id);
-
-      if (!res) {
-        toast.error("Failed to poll job");
-        return;
-      }
-
-      if (res.status === "pending" || res.status === "running") {
-        const delay = Math.min(
-          15000,
-          1000 * 2 ** Math.min(attempt, 4) // 1s -> 2 -> 4 -> 8 -> 16 capped at 15s
-        );
-        pollingRef.current = setTimeout(() => poll(id, attempt + 1), delay);
-      }
-    } catch (e) {
-      toast.error((e as Error)?.message || "Job polling failed");
-    }
   }, []);
+
+  const poll = useCallback(
+    async (id: string, attempt = 0) => {
+      try {
+        const res = await fetchJobStatus(id);
+
+        if (!res) {
+          toast.error("Failed to poll job");
+          return;
+        }
+
+        if (res.status === "pending" || res.status === "running") {
+          const delay = Math.min(
+            15000,
+            1000 * 2 ** Math.min(attempt, 4) // 1s -> 2 -> 4 -> 8 -> 16 capped at 15s
+          );
+          pollingRef.current = setTimeout(() => poll(id, attempt + 1), delay);
+        }
+      } catch (e) {
+        toast.error((e as Error)?.message || "Job polling failed");
+      }
+    },
+    [fetchJobStatus]
+  );
 
   const startStream = useCallback(
     (id: string) => {
@@ -265,6 +268,13 @@ export function useIngestJob() {
         setTranscriptError("Missing media identifier for transcription");
         return;
       }
+
+      // Prevent duplicate transcription requests for the same video
+      const transcriptionKey = opts.videoId || opts.url || "";
+      if (transcribeStartedForRef.current === transcriptionKey) {
+        return;
+      }
+      transcribeStartedForRef.current = transcriptionKey;
 
       setTranscriptStatus("pending");
       setTranscriptError(null);
