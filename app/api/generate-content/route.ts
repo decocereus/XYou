@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { z } from "zod";
 import {
@@ -9,8 +8,15 @@ import {
 } from "@/lib/content-types";
 import { SegmentSchema } from "@/lib/backend-schemas";
 import { buildPrompt } from "@/lib/prompts";
+import { openrouter } from "@/lib/openrouter";
 
-const MODEL = process.env.AI_MODEL || "gpt-4o";
+// Model configuration
+const GENERATOR_MODEL = process.env.GENERATOR_MODEL || "claude-sonnet-4-5";
+
+// Get the right model provider based on model name
+function getModel(modelName: string) {
+  return openrouter.chat(modelName);
+}
 
 const GenerateRequestSchema = z
   .object({
@@ -100,7 +106,7 @@ export async function POST(req: Request) {
     });
 
     const { text } = await generateText({
-      model: openai(MODEL),
+      model: getModel(GENERATOR_MODEL),
       prompt,
       temperature: parsed?.format === "shorts" ? 0.4 : 0.2,
     });

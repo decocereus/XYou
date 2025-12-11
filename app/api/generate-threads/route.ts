@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
-import { openai } from "@ai-sdk/openai";
 import { generateText } from "ai";
 import { buildThreadPrompt } from "@/lib/prompts";
 import { SegmentSchema } from "@/lib/backend-schemas";
+import { openrouter } from "@/lib/openrouter";
 
-const MODEL = process.env.AI_MODEL || "gpt-4o";
+// Model configuration
+const GENERATOR_MODEL = process.env.GENERATOR_MODEL || "claude-sonnet-4-5";
+
+// Get the right model provider based on model name
+function getModel(modelName: string) {
+  return openrouter.chat(modelName);
+}
 
 async function loadTranscript(transcript?: string, transcriptUrl?: string) {
   if (transcript) return transcript;
@@ -28,7 +34,7 @@ export async function POST(req: Request) {
     const prompt = buildThreadPrompt({ transcript, segments });
 
     const { text } = await generateText({
-      model: openai(MODEL),
+      model: getModel(GENERATOR_MODEL),
       prompt,
       temperature: 0.2,
     });

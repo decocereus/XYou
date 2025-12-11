@@ -7,9 +7,9 @@ import {
   Ban20,
   DashedCircle20,
   InfoCircleFilled20,
-  Minimize20,
   SealCheckmarkFilled20,
   SealExclamationFilled20,
+  XMark20,
 } from "@frosted-ui/icons";
 
 const geistSans = Geist({
@@ -65,7 +65,7 @@ export default function RootLayout({
               warning: <SealExclamationFilled20 />,
               error: <Ban20 />,
               loading: <DashedCircle20 />,
-              close: <Minimize20 />,
+              close: <XMark20 />,
             }}
             richColors
             closeButton

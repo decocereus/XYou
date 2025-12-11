@@ -18,11 +18,9 @@ import {
   Select,
   TextField,
   Separator,
-  ContextMenu,
 } from "@whop/react/components";
 import { useIngest } from "@/providers/IngestProvider";
-import { Copy20, LinkSlash20, Sparkle20, ArrowUp20 } from "@frosted-ui/icons";
-import { toast } from "sonner";
+import { LinkSlash20, Sparkle20, ArrowUp20 } from "@frosted-ui/icons";
 import { DefaultChatTransport } from "ai";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -33,6 +31,7 @@ import {
   defaultBatchSize,
 } from "@/lib/content-types";
 import { ContentCards } from "./content-cards";
+import { StyleInput, StyleProfileDisplay } from "./style-input";
 
 type ChatInterfaceProps = {
   prefillInput?: string | null;
@@ -59,13 +58,23 @@ export function ChatInterface({
     genContentLoading,
     regenerateContent,
     resetGeneratedContent,
+    transcriptStatus,
+    styleProfile,
+    setStyleProfile,
+    styleLoading,
+    analyzeStyle,
+    purpose,
+    setPurpose,
   } = useIngest();
 
-  const [selectedText, setSelectedText] = useState("");
-  const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
+  console.log("GENERATED CONTENT", generatedContent);
+  console.log("GENERATED CONTENT LOADING", genContentLoading);
+  console.log("GENERATED CONTENT TRANSCRIPT STATUS", transcriptStatus);
+  console.log("GENERATED CONTENT STYLE PROFILE", styleProfile);
+
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [showStyleInput, setShowStyleInput] = useState(false);
 
   // Content Gen State
   const [format, setFormat] = useState<ContentFormat>("tweet");
@@ -75,12 +84,14 @@ export function ChatInterface({
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
-        api: "/api/chat",
+        api: "/api/agent",
         body: () => ({
           context: transcript?.text || "",
+          styleProfile: styleProfile || undefined,
+          purpose: purpose || undefined,
         }),
       }),
-    [transcript?.text]
+    [transcript?.text, styleProfile, purpose]
   );
 
   const { messages, sendMessage, regenerate, status } = useChat({
@@ -92,7 +103,7 @@ export function ChatInterface({
         parts: [
           {
             type: "text",
-            text: "I've analyzed the video! I can help you generate threads, tweets, or blog posts. What kind of content would you like to create?",
+            text: "I've analyzed the video! I can help you generate tweets, threads, or scripts. You can also add a writing style by clicking 'Add Style' above.",
           },
         ],
       },
@@ -105,39 +116,7 @@ export function ChatInterface({
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, generatedContent]); // Scroll when content changes
-
-  // Handle text selection
-  useEffect(() => {
-    const handleSelectionChange = () => {
-      const selection = window.getSelection();
-      if (
-        selection &&
-        selection.toString().trim().length > 0 &&
-        containerRef.current?.contains(selection.anchorNode)
-      ) {
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-
-        // Ensure we don't show context menu if selection is inside an input/textarea
-        const activeTag = document.activeElement?.tagName.toLowerCase();
-        if (activeTag === "input" || activeTag === "textarea") return;
-
-        setSelectedText(selection.toString());
-        setSelectionRect(rect);
-      } else {
-        // Logic handled by click listener on container
-      }
-    };
-
-    const handleMouseUp = () => {
-      // Delay to ensure selection is final
-      setTimeout(handleSelectionChange, 10);
-    };
-
-    document.addEventListener("mouseup", handleMouseUp);
-    return () => document.removeEventListener("mouseup", handleMouseUp);
-  }, []);
+  }, [messages, generatedContent]);
 
   useEffect(() => {
     if (prefillInput) {
@@ -161,28 +140,20 @@ export function ChatInterface({
   };
 
   const handleRefine = (text: string) => {
-    setInput(`Refine this: "${text}"`);
-    // Optionally focus input
-  };
-
-  const handleRefineSelection = (tone: string) => {
-    if (!selectedText) return;
-    setInput(`Refine this text to be more ${tone}: "${selectedText}"`);
-    setSelectedText("");
-    setSelectionRect(null);
-    window.getSelection()?.removeAllRanges();
+    setInput(`Improve this: "${text}"`);
   };
 
   const handleGenerate = async () => {
     await generateContent({ format, tone, count });
   };
 
+  const handleStyleAnalysis = async (tweets: string[]) => {
+    await analyzeStyle(tweets);
+    setShowStyleInput(false);
+  };
+
   return (
-    <div
-      className="relative w-full flex flex-col h-[600px] bg-black/20 rounded-2xl border border-white/10 backdrop-blur-sm overflow-hidden"
-      ref={containerRef}
-      onContextMenu={(e) => e.preventDefault()}
-    >
+    <div className="relative w-full flex flex-col h-[700px] bg-black/20 rounded-2xl border border-white/10 backdrop-blur-sm overflow-hidden">
       {/* Header */}
       <div className="p-4 flex items-center justify-between border-b border-white/10 bg-white/5">
         <div className="flex items-center gap-3">
@@ -198,250 +169,257 @@ export function ChatInterface({
             </Text>
           </div>
         </div>
-        <IconButton
-          variant="ghost"
-          className="text-white/40 hover:text-white"
-          onClick={() => regenerate()}
-        >
-          <LinkSlash20 />
-        </IconButton>
+        <div className="flex items-center gap-2">
+          <Button
+            size="1"
+            variant={showStyleInput ? "soft" : "ghost"}
+            className={
+              showStyleInput
+                ? "bg-purple-500/20 text-purple-400"
+                : "text-white/50 hover:text-white"
+            }
+            onClick={() => setShowStyleInput(!showStyleInput)}
+          >
+            {styleProfile ? "Edit Style" : "Add Style"}
+          </Button>
+          <IconButton
+            variant="ghost"
+            className="text-white/40 hover:text-white"
+            onClick={() => regenerate()}
+          >
+            <LinkSlash20 />
+          </IconButton>
+        </div>
+      </div>
+
+      {/* Style Profile Section */}
+      <AnimatePresence>
+        {(showStyleInput || styleProfile) && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-b border-white/10 overflow-hidden"
+          >
+            <div className="p-4">
+              {showStyleInput && !styleProfile ? (
+                <StyleInput
+                  onAnalyze={handleStyleAnalysis}
+                  isLoading={styleLoading}
+                  disabled={genContentLoading}
+                />
+              ) : styleProfile ? (
+                <StyleProfileDisplay
+                  style={styleProfile}
+                  name="Active Style"
+                  onClear={() => {
+                    setStyleProfile(null);
+                    setShowStyleInput(false);
+                  }}
+                />
+              ) : null}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Purpose Input */}
+      <div className="px-4 py-2 border-b border-white/10 bg-white/5">
+        <TextField.Root size="2" className="w-full">
+          <TextField.Input
+            value={purpose}
+            onChange={(e) => setPurpose(e.target.value)}
+            placeholder="Content purpose (e.g., affiliate marketing, personal brand, thought leadership)"
+            className="bg-transparent border-0 text-white/80 placeholder:text-white/30 text-sm"
+          />
+        </TextField.Root>
       </div>
 
       {/* Messages Area */}
+      <div className="flex-1 overflow-hidden flex flex-col">
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto p-4 space-y-4"
+          aria-label="Chat transcript"
+        >
+          <AnimatePresence initial={false}>
+            {messages.map((message: UIMessage) => (
+              <motion.div
+                key={message.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`flex gap-4 ${
+                  message.role === "user" ? "flex-row-reverse" : "flex-row"
+                }`}
+              >
+                <div
+                  className={`flex flex-col gap-1 max-w-[85%] ${
+                    message.role === "user" ? "items-end" : "items-start"
+                  }`}
+                >
+                  <div
+                    className={`p-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                      message.role === "user"
+                        ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-br-none"
+                        : "bg-white/10 text-white/90 border border-white/10 rounded-bl-none"
+                    }`}
+                  >
+                    {getMessageContent(message)}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+            {isBusy && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex gap-4"
+              >
+                <div className="bg-white/10 p-4 rounded-2xl rounded-bl-none border border-white/10 flex gap-1.5 items-center h-12">
+                  <span className="w-1.5 h-1.5 bg-white/60 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-1.5 h-1.5 bg-white/60 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-1.5 h-1.5 bg-white/60 rounded-full animate-bounce" />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Generated Content */}
+      </div>
 
       {/* Input Area */}
-      <AnimatePresence>
-        <ContextMenu.Root>
-          <ContextMenu.Trigger>
-            <div className="w-full overflow-y-auto relative">
-              <div
-                ref={scrollRef}
-                className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth"
-                aria-label="Chat transcript"
-                onClick={() => {
-                  // Clear selection if clicking on empty space
-                  const selection = window.getSelection();
-                  if (selection?.isCollapsed) {
-                    setSelectedText("");
-                    setSelectionRect(null);
-                  }
-                }}
-              >
-                {/* Generated Content Section (Merged) */}
-                <AnimatePresence initial={false}>
-                  {messages.map((message: UIMessage) => (
-                    <motion.div
-                      key={message.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`flex gap-4 ${
-                        message.role === "user"
-                          ? "flex-row-reverse"
-                          : "flex-row"
-                      }`}
-                    >
-                      <div
-                        className={`flex flex-col gap-1 max-w-[85%] ${
-                          message.role === "user" ? "items-end" : "items-start"
-                        }`}
-                      >
-                        <div
-                          className={`p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap shadow-sm ${
-                            message.role === "user"
-                              ? "bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-br-none"
-                              : "bg-white/10 text-white/90 border border-white/10 rounded-bl-none backdrop-blur-md"
-                          }`}
-                        >
-                          {getMessageContent(message)}
-                        </div>
-                      </div>
-                    </motion.div>
-                  ))}
-                  {isBusy && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex gap-4"
-                    >
-                      <div className="bg-white/10 p-4 rounded-2xl rounded-bl-none border border-white/10 flex gap-1.5 items-center h-12 shadow-sm">
-                        <span className="w-1.5 h-1.5 bg-white/60 rounded-full animate-bounce [animation-delay:-0.3s]" />
-                        <span className="w-1.5 h-1.5 bg-white/60 rounded-full animate-bounce [animation-delay:-0.15s]" />
-                        <span className="w-1.5 h-1.5 bg-white/60 rounded-full animate-bounce" />
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-              <Separator className="w-full" />
-              <div className="p-4 flex flex-col gap-3 w-full z-10">
-                {/* Settings Toolbar */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                  <Select.Root
-                    value={format}
-                    onValueChange={(value) => {
-                      const f = value as ContentFormat;
-                      setFormat(f);
-                      setCount(defaultBatchSize[f]);
-                    }}
+      <div className="p-4 border-t border-white/10 bg-white/5 space-y-3">
+        {/* Settings Toolbar */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <Select.Root
+            value={format}
+            onValueChange={(value) => {
+              const f = value as ContentFormat;
+              setFormat(f);
+              setCount(defaultBatchSize[f]);
+            }}
+          >
+            <Select.Trigger className="bg-white/5 border border-white/10 hover:bg-white/10 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white/80" />
+            <Select.Content>
+              <Select.Group>
+                {Object.entries(contentFormatLabels).map(([k, v]) => (
+                  <Select.Item
+                    key={k}
+                    value={k}
+                    className="bg-gray-900 text-white"
                   >
-                    <Select.Trigger className="bg-white/5 border border-white/10 hover:bg-white/10 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white/80 focus:outline-none focus:ring-1 focus:ring-white/20 transition-colors cursor-pointer appearance-none" />
-                    <Select.Content>
-                      <Select.Group>
-                        {Object.entries(contentFormatLabels).map(([k, v]) => (
-                          <Select.Item
-                            key={k}
-                            value={k}
-                            className="bg-gray-900 text-white"
-                          >
-                            {v}
-                          </Select.Item>
-                        ))}
-                      </Select.Group>
-                    </Select.Content>
-                  </Select.Root>
-                  <Select.Root
-                    value={tone}
-                    onValueChange={(value) => setTone(value as Tone)}
+                    {v}
+                  </Select.Item>
+                ))}
+              </Select.Group>
+            </Select.Content>
+          </Select.Root>
+
+          <Select.Root
+            value={tone}
+            onValueChange={(value) => setTone(value as Tone)}
+          >
+            <Select.Trigger className="bg-white/5 border border-white/10 hover:bg-white/10 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white/80" />
+            <Select.Content>
+              <Select.Group>
+                {Object.entries(toneLabels).map(([k, v]) => (
+                  <Select.Item
+                    key={k}
+                    value={k}
+                    className="bg-gray-900 text-white"
                   >
-                    <Select.Trigger className="bg-white/5 border border-white/10 hover:bg-white/10 rounded-lg px-2.5 py-1.5 text-xs font-medium text-white/80 focus:outline-none focus:ring-1 focus:ring-white/20 transition-colors cursor-pointer appearance-none" />
-                    <Select.Content>
-                      <Select.Group>
-                        {Object.entries(toneLabels).map(([k, v]) => (
-                          <Select.Item
-                            key={k}
-                            value={k}
-                            className="bg-gray-900 text-white"
-                          >
-                            {v}
-                          </Select.Item>
-                        ))}
-                      </Select.Group>
-                    </Select.Content>
-                  </Select.Root>
+                    {v}
+                  </Select.Item>
+                ))}
+              </Select.Group>
+            </Select.Content>
+          </Select.Root>
 
-                  <span className="text-[10px] text-white/40 uppercase font-bold tracking-wider">
-                    Count
-                  </span>
-                  <TextField.Root size="3" className="w-16">
-                    <TextField.Input
-                      type="number"
-                      value={count}
-                      onChange={(e) =>
-                        setCount(
-                          Math.min(20, Math.max(1, Number(e.target.value)))
-                        )
-                      }
-                      className="w-16 bg-transparent text-xs font-medium text-white/80 focus:outline-none text-center"
-                      min={1}
-                      max={20}
-                    />
-                  </TextField.Root>
+          <span className="text-[10px] text-white/40 uppercase font-bold tracking-wider">
+            Count
+          </span>
+          <TextField.Root size="2" className="w-14">
+            <TextField.Input
+              type="number"
+              value={count}
+              onChange={(e) =>
+                setCount(Math.min(20, Math.max(0, Number(e.target.value))))
+              }
+              className="w-14 bg-transparent text-xs font-medium text-white/80 text-center"
+              max={20}
+            />
+          </TextField.Root>
 
-                  <Separator className="h-full mx-2 w-px" />
+          <Separator orientation="vertical" className="h-6 mx-1" />
 
-                  <Button
-                    size="2"
-                    className="h-8 text-xs bg-white/5 border-white/10 hover:bg-white/10 text-white/80"
-                    onClick={handleGenerate}
-                    disabled={genContentLoading}
-                    loading={genContentLoading}
-                  >
-                    <Sparkle20 className="mr-1.5 w-3.5 h-3.5" />
-                    Generate
-                  </Button>
-                </div>
+          <Button
+            size="2"
+            className="h-8 text-xs bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white border-0"
+            onClick={handleGenerate}
+            disabled={genContentLoading || transcriptStatus !== "success"}
+            loading={genContentLoading}
+          >
+            <Sparkle20 className="mr-1.5 w-3.5 h-3.5" />
+            Generate
+          </Button>
+        </div>
 
-                <form onSubmit={handleSubmit} className="relative group w-full">
-                  <TextArea
-                    value={input}
-                    onChange={handleInputChange}
-                    placeholder="Ask to generate a thread, specific tweet, or refine content..."
-                    className="w-full pr-14 min-h-[60px] resize-none bg-black/20 border-white/10 text-white placeholder:text-white/30 focus:border-white/20 focus:ring-0 rounded-xl"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSubmit(e);
-                      }
-                    }}
-                  />
-                  <div className="absolute bottom-3 right-3">
-                    <IconButton
-                      type="submit"
-                      disabled={isBusy || !input.trim()}
-                      variant="solid"
-                      className={`rounded-lg transition-all duration-300 ${
-                        input.trim()
-                          ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-purple-500/20"
-                          : "bg-white/10 text-white/20"
-                      }`}
-                    >
-                      <ArrowUp20 />
-                    </IconButton>
-                  </div>
-                </form>
-              </div>
-            </div>
-          </ContextMenu.Trigger>
-          {/* Floating Context Menu */}
-          <ContextMenu.Content className="h-max w-max">
-            <div className="flex items-end justify-between w-full">
-              <ContextMenu.Item>Refine</ContextMenu.Item>
-              <IconButton
-                size="1"
-                variant="ghost"
-                className="text-white/60 hover:text-white"
-                onClick={() => {
-                  navigator.clipboard.writeText(selectedText);
-                  toast.success("Copied!");
-                  setSelectedText("");
-                  setSelectionRect(null);
-                  window.getSelection()?.removeAllRanges();
-                }}
-              >
-                <Copy20 />
-              </IconButton>
-            </div>
-            <ContextMenu.Separator />
-            <ContextMenu.Item
-              onClick={() => handleRefineSelection("professional")}
+        {/* Chat Input */}
+        <form onSubmit={handleSubmit} className="relative">
+          <TextArea
+            value={input}
+            onChange={handleInputChange}
+            placeholder="Ask to generate content, refine results, or get suggestions..."
+            className="w-full pr-14 min-h-[60px] resize-none bg-black/20 border-white/10 text-white placeholder:text-white/30 rounded-xl"
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
+          />
+          <div className="absolute bottom-3 right-3">
+            <IconButton
+              type="submit"
+              disabled={isBusy || !input.trim()}
+              variant="solid"
+              className={`rounded-lg transition-all duration-300 ${
+                input.trim()
+                  ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-purple-500/20"
+                  : "bg-white/10 text-white/20"
+              }`}
             >
-              Professional
-            </ContextMenu.Item>
-            <ContextMenu.Item onClick={() => handleRefineSelection("funny")}>
-              Funny
-            </ContextMenu.Item>
-            <ContextMenu.Item onClick={() => handleRefineSelection("viral")}>
-              Viral
-            </ContextMenu.Item>
-          </ContextMenu.Content>
-        </ContextMenu.Root>
-      </AnimatePresence>
-
+              <ArrowUp20 />
+            </IconButton>
+          </div>
+        </form>
+      </div>
       <AnimatePresence>
         {generatedContent.length > 0 && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            className="mb-6"
+            className="border-t border-white/10 max-h-[300px] overflow-y-auto"
           >
-            <div className="flex items-center justify-between mb-3 px-1">
-              <div className="flex items-center gap-2">
-                <div className="w-1 h-4 bg-purple-500 rounded-full" />
-                <Text size="2" weight="semi-bold" className="text-white/80">
-                  Generated Content
-                </Text>
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-1 h-4 bg-purple-500 rounded-full" />
+                  <Text size="2" weight="semi-bold" className="text-white/80">
+                    Generated Content
+                  </Text>
+                </div>
+                <Button
+                  size="1"
+                  variant="ghost"
+                  className="text-white/40 hover:text-white"
+                  onClick={resetGeneratedContent}
+                >
+                  Clear
+                </Button>
               </div>
-              <Button
-                size="2"
-                variant="ghost"
-                className="text-white/40 hover:text-white hover:bg-white/10"
-                onClick={resetGeneratedContent}
-              >
-                Clear
-              </Button>
-            </div>
-            <div className="bg-white/5 rounded-xl border border-white/10 overflow-hidden">
               <ContentCards
                 items={generatedContent}
                 onRegenerate={regenerateContent}

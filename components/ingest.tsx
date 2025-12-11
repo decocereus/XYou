@@ -22,7 +22,7 @@ function IngestFlow() {
 
   return (
     <div className="w-full flex flex-col items-center justify-center p-4 relative h-full">
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="sync">
         {!status && (
           <motion.div
             key="form"
@@ -35,6 +35,7 @@ function IngestFlow() {
             <IngestFormCard />
           </motion.div>
         )}
+
         <div className="">{info && <VideoPreviewCard />}</div>
 
         {isProcessing && (

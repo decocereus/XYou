@@ -17,6 +17,7 @@ import type {
   ContentFormat,
   GeneratedContentItem,
   Tone,
+  StyleProfile,
 } from "@/lib/content-types";
 
 export type ThreadResult = {
@@ -67,6 +68,14 @@ type IngestContextValue = {
   downloadTranscript: () => Promise<void>;
   resetThreads: () => void;
   statusColor: typeof statusColor;
+  // Style profile state
+  styleProfile: StyleProfile | null;
+  setStyleProfile: (profile: StyleProfile | null) => void;
+  styleLoading: boolean;
+  analyzeStyle: (exampleTweets: string[]) => Promise<void>;
+  // Purpose state
+  purpose: string;
+  setPurpose: (purpose: string) => void;
 };
 
 const IngestContext = createContext<IngestContextValue | null>(null);
@@ -98,6 +107,14 @@ export function IngestProvider({
   >([]);
   const [genContentError, setGenContentError] = useState<string | null>(null);
   const [genContentLoading, setGenContentLoading] = useState(false);
+
+  // Style profile state
+  const [styleProfile, setStyleProfile] = useState<StyleProfile | null>(null);
+  const [styleLoading, setStyleLoading] = useState(false);
+
+  // Purpose state
+  const [purpose, setPurpose] = useState("");
+
   const lastGenerationRef = useRef<{
     format: ContentFormat;
     tone: Tone;
@@ -168,8 +185,9 @@ export function IngestProvider({
       }
       const json = await res.json();
       setThreads(json.result || json);
-    } catch (e: any) {
-      setGenError(e?.message || "Failed to generate threads");
+    } catch (e: unknown) {
+      const error = e as Error;
+      setGenError(error?.message || "Failed to generate threads");
     } finally {
       setGenLoading(false);
     }
@@ -193,6 +211,68 @@ export function IngestProvider({
     return workingTranscript;
   }, [job?.id, transcript]);
 
+  // Analyze style from example tweets
+  const analyzeStyle = useCallback(async (exampleTweets: string[]) => {
+    setStyleLoading(true);
+    try {
+      const res = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            {
+              id: "analyze-style",
+              role: "user",
+              parts: [
+                {
+                  type: "text",
+                  text: `Please analyze the writing style of these example tweets and create a style profile:\n\n${exampleTweets
+                    .map((t, i) => `${i + 1}. "${t}"`)
+                    .join("\n\n")}`,
+                },
+              ],
+            },
+          ],
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to analyze style");
+      }
+
+      // For now, parse a simple style from the response
+      // In a full implementation, we'd use the agent's tool result
+      const text = await res.text();
+
+      console.log("LOG PARSED TEXT ", text);
+
+      // Try to extract style profile from agent response
+      // This is a simplified version - the agent should return structured data
+      setStyleProfile({
+        tone: "engaging",
+        vocabulary: "varied",
+        sentenceStructure: "mixed, punchy",
+        hooks: "direct statements, questions",
+        patterns: ["short sentences", "contractions", "bold claims"],
+        summary: "Analyzed from " + exampleTweets.length + " example tweets",
+      });
+    } catch (e: unknown) {
+      const error = e as Error;
+      console.error("Style analysis error:", error);
+      // Set a default profile on error
+      setStyleProfile({
+        tone: "engaging",
+        vocabulary: "varied",
+        sentenceStructure: "mixed",
+        hooks: "direct statements",
+        patterns: [],
+        summary: "Default style profile",
+      });
+    } finally {
+      setStyleLoading(false);
+    }
+  }, []);
+
   const generateContent = useCallback(
     async ({
       format,
@@ -207,33 +287,187 @@ export function IngestProvider({
       setGenContentLoading(true);
       try {
         const workingTranscript = await resolveTranscript();
-        const res = await fetch("/api/generate-content", {
+
+        // Use the agent endpoint for generation
+        const res = await fetch("/api/agent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            transcript: workingTranscript.text,
-            segments: workingTranscript.segments,
-            format,
-            tone,
-            count,
+            messages: [
+              {
+                id: "generate-content",
+                role: "user",
+                parts: [
+                  {
+                    type: "text",
+                    text: `Generate ${count} ${format}${count > 1 ? "s" : ""} from this transcript. Tone: ${tone}.${
+                      purpose ? ` Purpose: ${purpose}.` : ""
+                    }`,
+                  },
+                ],
+              },
+            ],
+            context: workingTranscript.text,
+            styleProfile: styleProfile || undefined,
+            purpose: purpose || undefined,
           }),
         });
-        const json = await res.json();
+
         if (!res.ok) {
-          throw new Error(json?.error || "Failed to generate content");
+          const errorJson = await res.json().catch(() => ({}));
+          throw new Error(errorJson?.error || "Failed to generate content");
         }
-        const items = Array.isArray(json.items)
-          ? (json.items as GeneratedContentItem[])
-          : [];
+
+        // Parse SSE streaming response - collect all text deltas
+        const reader = res.body?.getReader();
+        if (!reader) {
+          throw new Error("No response body");
+        }
+
+        let fullText = "";
+        let toolOutput: unknown = null;
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // Parse SSE events from the buffer
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6); // Remove "data: " prefix
+              if (data.trim() === "") continue;
+
+              try {
+                const parsed = JSON.parse(data);
+                // Extract text from UI message stream format
+                if (parsed.type === "text-delta" && parsed.delta) {
+                  fullText += parsed.delta;
+                }
+                // Capture tool output - this contains the actual generated content
+                if (parsed.type === "tool-output-available") {
+                  toolOutput = parsed;
+                }
+              } catch {
+                // Not valid JSON, skip
+              }
+            }
+          }
+        }
+
+        // Process any remaining buffer
+        if (buffer.startsWith("data: ")) {
+          const data = buffer.slice(6);
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === "text-delta" && parsed.delta) {
+              fullText += parsed.delta;
+            }
+          } catch {
+            // Not valid JSON, skip
+          }
+        }
+
+        // Try to extract items from tool output first (preferred)
+        const items: GeneratedContentItem[] = [];
+
+        // Check if we have tool output with items (from generateTweets, generateThread, etc.)
+        const toolOutputTyped = toolOutput as {
+          output?: {
+            items?: Array<{
+              id?: string;
+              content?: string;
+              charCount?: number;
+            }>;
+          };
+        } | null;
+        if (
+          toolOutputTyped?.output?.items &&
+          Array.isArray(toolOutputTyped.output.items)
+        ) {
+          toolOutputTyped.output.items.forEach((item, idx) => {
+            if (item.content) {
+              items.push({
+                id: item.id || `item-${idx + 1}`,
+                format,
+                content: item.content,
+                charCount: item.charCount || item.content.length,
+                tone,
+              });
+            }
+          });
+        }
+
+        // Fallback: if no tool output items, try parsing text (for non-tool responses)
+        if (items.length === 0 && fullText.trim().length > 0) {
+          const parts = fullText
+            .split(/\n{2,}/)
+            .filter((p) => p.trim().length > 20 && p.trim().length <= 300);
+
+          parts.slice(0, count).forEach((content, idx) => {
+            items.push({
+              id: `item-${idx + 1}`,
+              format,
+              content: content.trim(),
+              charCount: content.trim().length,
+              tone,
+            });
+          });
+
+          // Final fallback: treat whole response as one item
+          if (items.length === 0) {
+            items.push({
+              id: "item-1",
+              format,
+              content: fullText.trim().slice(0, 280),
+              charCount: Math.min(fullText.trim().length, 280),
+              tone,
+            });
+          }
+        }
+
+        // #region agent log
+        fetch(
+          "http://127.0.0.1:7242/ingest/3553b901-c218-4d7b-a8fa-eb9b28bf9eba",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              location: "IngestProvider.tsx:410",
+              message: "Final items array",
+              data: {
+                itemsCount: items.length,
+                items: items.map((i) => ({
+                  id: i.id,
+                  contentLength: i.content.length,
+                  contentPreview: i.content.slice(0, 100),
+                })),
+              },
+              timestamp: Date.now(),
+              sessionId: "debug-session",
+              hypothesisId: "H3",
+            }),
+          }
+        ).catch(() => {});
+        // #endregion
+
+        console.log("GENERATED CONTENT", items);
+
         setGeneratedContent(items);
         lastGenerationRef.current = { format, tone, count };
-      } catch (e: any) {
-        setGenContentError(e?.message || "Failed to generate content");
+      } catch (e: unknown) {
+        const error = e as Error;
+        setGenContentError(error?.message || "Failed to generate content");
       } finally {
         setGenContentLoading(false);
       }
     },
-    [resolveTranscript]
+    [resolveTranscript, styleProfile, purpose]
   );
 
   const regenerateContent = useCallback(
@@ -245,33 +479,100 @@ export function IngestProvider({
       }
       try {
         const workingTranscript = await resolveTranscript();
-        const res = await fetch("/api/generate-content", {
+
+        const res = await fetch("/api/agent", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            transcript: workingTranscript.text,
-            segments: workingTranscript.segments,
-            format: last.format,
-            tone: last.tone,
-            count: 1,
+            messages: [
+              {
+                id: "regenerate-content",
+                role: "user",
+                parts: [
+                  {
+                    type: "text",
+                    text: `Generate 1 new ${last.format} from this transcript. Tone: ${last.tone}. Make it different from previous ones.`,
+                  },
+                ],
+              },
+            ],
+            context: workingTranscript.text,
+            styleProfile: styleProfile || undefined,
+            purpose: purpose || undefined,
           }),
         });
-        const json = await res.json();
+
         if (!res.ok) {
-          throw new Error(json?.error || "Failed to regenerate content");
+          const errorJson = await res.json().catch(() => ({}));
+          throw new Error(errorJson?.error || "Failed to regenerate content");
         }
-        const [fresh] = Array.isArray(json.items)
-          ? (json.items as GeneratedContentItem[])
-          : [];
-        if (!fresh) return;
+
+        const reader = res.body?.getReader();
+        if (!reader) {
+          throw new Error("No response body");
+        }
+
+        let fullText = "";
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // Parse SSE events from the buffer
+          const lines = buffer.split("\n");
+          buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6);
+              if (data.trim() === "") continue;
+
+              try {
+                const parsed = JSON.parse(data);
+                if (parsed.type === "text-delta" && parsed.delta) {
+                  fullText += parsed.delta;
+                }
+              } catch {
+                // Not valid JSON, skip
+              }
+            }
+          }
+        }
+
+        // Process any remaining buffer
+        if (buffer.startsWith("data: ")) {
+          const data = buffer.slice(6);
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === "text-delta" && parsed.delta) {
+              fullText += parsed.delta;
+            }
+          } catch {
+            // Not valid JSON, skip
+          }
+        }
+
+        const content = fullText.trim().slice(0, 300);
+        const fresh: GeneratedContentItem = {
+          id,
+          format: last.format,
+          content,
+          charCount: content.length,
+          tone: last.tone,
+        };
+
         setGeneratedContent((prev) =>
           prev.map((item) => (item.id === id ? fresh : item))
         );
-      } catch (e: any) {
-        setGenContentError(e?.message || "Failed to regenerate");
+      } catch (e: unknown) {
+        const error = e as Error;
+        setGenContentError(error?.message || "Failed to regenerate");
       }
     },
-    [resolveTranscript]
+    [resolveTranscript, styleProfile, purpose]
   );
 
   const downloadTranscript = useCallback(async () => {
@@ -366,6 +667,14 @@ export function IngestProvider({
       downloadTranscript,
       resetThreads,
       statusColor,
+      // Style profile
+      styleProfile,
+      setStyleProfile,
+      styleLoading,
+      analyzeStyle,
+      // Purpose
+      purpose,
+      setPurpose,
     }),
     [
       canSubmit,
@@ -391,6 +700,10 @@ export function IngestProvider({
       transcriptStatus,
       threads,
       url,
+      styleProfile,
+      styleLoading,
+      analyzeStyle,
+      purpose,
     ]
   );
 

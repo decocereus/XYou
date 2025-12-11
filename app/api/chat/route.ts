@@ -1,8 +1,16 @@
-import { openai } from "@ai-sdk/openai";
+import { openrouter } from "@/lib/openrouter";
 import { streamText, type UIMessage, convertToModelMessages } from "ai";
 
 // Allow streaming responses up to 30 seconds
 export const maxDuration = 30;
+
+// Model configuration
+const GENERATOR_MODEL = process.env.GENERATOR_MODEL || "claude-sonnet-4-5";
+
+// Get the right model provider based on model name
+function getModel(modelName: string) {
+  return openrouter.chat(modelName);
+}
 
 export async function POST(req: Request) {
   const { messages, context } = (await req.json()) as {
@@ -28,7 +36,7 @@ export async function POST(req: Request) {
   const modelMessages = convertToModelMessages(messages);
 
   const result = streamText({
-    model: openai("gpt-4o"),
+    model: getModel(GENERATOR_MODEL),
     system: systemMessage,
     messages: modelMessages,
   });

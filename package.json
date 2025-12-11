@@ -9,17 +9,18 @@
     "lint": "biome lint"
   },
   "dependencies": {
-    "@ai-sdk/openai": "2.0.77",
     "@ai-sdk/react": "^2.0.109",
     "@frosted-ui/icons": "0.0.1-canary.23",
+    "@openrouter/ai-sdk-provider": "^1.5.3",
     "@vercel/functions": "^3.1.4",
     "@whop/react": "0.3.0",
     "@whop/sdk": "0.0.13",
     "ai": "5.0.107",
+    "convex": "^1.31.0",
     "framer-motion": "^12.23.25",
     "next": "16.0.7",
-    "react": "19.2.1",
-    "react-dom": "19.2.1",
+    "react": "19.2.2",
+    "react-dom": "19.2.2",
     "sonner": "^2.0.7",
     "zod": "^3.23.8"
   },

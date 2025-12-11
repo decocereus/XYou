@@ -1,42 +1,12 @@
 import { z } from "zod";
-const ViralityScore = z.number().min(0).max(10);
-const HookStrength = z.number().min(0).max(10);
-const Confidence = z.number().min(0).max(1);
 
 export const GeneratedItemSchema = z.object({
   id: z.string().optional(),
-  content: z.string(), // tweet/body text
+  content: z.string(),
   charCount: z.number().int().nonnegative().optional(),
   tone: z.string().nullable().optional(),
-  hashtags: z.array(z.string()).nullable().optional(),
-  mentions: z.array(z.string()).nullable().optional(),
-  excerpt_source: z.string().nullable().optional(),
-  insight_type: z
-    .enum([
-      "how-to",
-      "data",
-      "opinion",
-      "case-study",
-      "quote",
-      "counterintuitive",
-      "teaser",
-      "warning",
-    ])
-    .nullable()
-    .optional(),
-  hook_strength: HookStrength.optional(),
-  virality_score: ViralityScore.optional(),
-  confidence: Confidence.optional(),
-  compression_ratio: z.number().min(0).optional(), // input length / output length
-  reasons: z.string().nullable().optional(), // 10-20 words
-  safety: z
-    .object({
-      nsfw: z.boolean().optional(),
-      medical_claims: z.boolean().optional(),
-      legal_claims: z.boolean().optional(),
-    })
-    .optional(),
-  meta: z.record(z.any()).optional(), // room for future fields
+  parts: z.array(z.string()).nullable().optional(),
+  meta: z.record(z.any()).optional(),
 });
 
 export const GenerateResponseSchema = z.object({
@@ -44,7 +14,7 @@ export const GenerateResponseSchema = z.object({
   pass_meta: z
     .object({
       generator_model: z.string(),
-      critic_model: z.string(),
+      critic_model: z.string().optional(),
       passes: z.number(),
       timestamp: z.string().datetime(),
     })
@@ -53,3 +23,15 @@ export const GenerateResponseSchema = z.object({
 
 export type GeneratedItem = z.infer<typeof GeneratedItemSchema>;
 export type GenerateResponse = z.infer<typeof GenerateResponseSchema>;
+
+// Style profile schema (matches Convex)
+export const StyleProfileSchema = z.object({
+  tone: z.string(),
+  vocabulary: z.string(),
+  sentenceStructure: z.string(),
+  hooks: z.string(),
+  patterns: z.array(z.string()),
+  summary: z.string(),
+});
+
+export type StyleProfile = z.infer<typeof StyleProfileSchema>;
