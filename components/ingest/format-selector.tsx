@@ -41,17 +41,15 @@ export function FormatSelector({
 }: Readonly<FormatSelectorProps>) {
   return (
     <Card
-      variant="classic"
       size="3"
-      className="border border-white/10 bg-white/5 backdrop-blur-xl shadow-lg"
     >
       <div className="flex flex-col gap-y-3">
         <div className="flex items-center gap-x-2">
-          <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400">
+          <div className="w-8 h-8 rounded-lg bg-whop-primary/10 flex items-center justify-center text-whop-primary">
             <Sparkle20 />
           </div>
           <div className="flex flex-col items-start gap-y-1">
-            <Text weight="semi-bold" className="text-white">
+            <Text weight="semi-bold">
               Content Settings
             </Text>
             <Text size="1" color="gray">
@@ -71,6 +69,7 @@ export function FormatSelector({
                 <Button
                   key={value}
                   size="2"
+                  variant={isActive ? "solid" : "outline"}
                   color={isActive ? "blue" : "gray"}
                   disabled={disabled}
                   onClick={() =>
@@ -100,6 +99,7 @@ export function FormatSelector({
                 <Button
                   key={value}
                   size="2"
+                  variant={isActive ? "solid" : "outline"}
                   color={isActive ? "purple" : "gray"}
                   disabled={disabled}
                   onClick={() => onChange({ tone: value })}
@@ -117,8 +117,6 @@ export function FormatSelector({
           </Text>
           <TextField.Root
             size="3"
-            variant="surface"
-            className="bg-black/30 border-white/10"
           >
             <TextField.Input
               type="number"
@@ -133,7 +131,6 @@ export function FormatSelector({
                   ),
                 })
               }
-              className="text-white"
             />
           </TextField.Root>
           <Text size="1" color="gray">

@@ -30,6 +30,7 @@ export async function POST(req: Request) {
     const { text } = await generateText({
       model: openai(MODEL),
       prompt,
+      temperature: 0.2,
     });
 
     let parsed: any;

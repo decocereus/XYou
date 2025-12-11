@@ -7,11 +7,12 @@ import { ProgressView } from "./ingest/progress-view";
 import { ChatInterface } from "./ingest/chat-interface";
 import { VideoPreviewCard } from "./ingest/video-preview-card";
 import { IngestProvider, useIngest } from "@/providers/IngestProvider";
-import { ContentGenerator } from "./ingest/content-generator";
 
 function IngestFlow() {
   const { status, transcriptStatus, info } = useIngest();
   const [chatPrefill, setChatPrefill] = useState<string | null>(null);
+
+  console.log("STATUS", status);
 
   // Step 2: Processing (status is running/processing OR transcript is pending)
   const isProcessing = status === "running" || transcriptStatus === "pending";
@@ -25,8 +26,11 @@ function IngestFlow() {
         {!status && (
           <motion.div
             key="form"
-            exit={{ opacity: 0, y: -20, filter: "blur(10px)" }}
-            transition={{ duration: 0.5 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="w-full"
           >
             <IngestFormCard />
           </motion.div>
@@ -36,10 +40,10 @@ function IngestFlow() {
         {isProcessing && (
           <motion.div
             key="progress"
-            initial={{ opacity: 0, y: 20, filter: "blur(10px)" }}
-            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-            exit={{ opacity: 0, y: -20, filter: "blur(10px)" }}
-            transition={{ duration: 0.5 }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
             className="w-full flex flex-col items-center gap-6"
           >
             <ProgressView />
@@ -49,12 +53,11 @@ function IngestFlow() {
         {isChatStep && (
           <motion.div
             key="chat"
-            initial={{ opacity: 0, scale: 0.95, filter: "blur(10px)" }}
-            animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-            transition={{ duration: 0.8, type: "spring" }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
             className="w-full h-full flex flex-col gap-y-5 py-6"
           >
-            <ContentGenerator onRefine={(text) => setChatPrefill(text)} />
             <ChatInterface
               prefillInput={chatPrefill}
               onConsumePrefill={() => setChatPrefill(null)}

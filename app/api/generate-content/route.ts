@@ -8,12 +8,7 @@ import {
   type GeneratedContentItem,
 } from "@/lib/content-types";
 import { SegmentSchema } from "@/lib/backend-schemas";
-import {
-  buildLinkedInPrompt,
-  buildShortsPrompt,
-  buildThreadPrompt,
-  buildTweetPrompt,
-} from "@/lib/prompts";
+import { buildPrompt } from "@/lib/prompts";
 
 const MODEL = process.env.AI_MODEL || "gpt-4o";
 
@@ -40,28 +35,6 @@ async function loadTranscript(
   const res = await fetch(transcriptUrl);
   if (!res.ok) throw new Error("Failed to fetch transcript");
   return await res.text();
-}
-
-function buildPrompt(input: {
-  format: z.infer<typeof ContentFormatSchema>;
-  transcript: string;
-  segments?: z.infer<typeof SegmentSchema>[];
-  tone?: z.infer<typeof ToneSchema>;
-  count?: number;
-}) {
-  const { format, ...rest } = input;
-  switch (format) {
-    case "tweet":
-      return buildTweetPrompt(rest);
-    case "thread":
-      return buildThreadPrompt(rest);
-    case "linkedin":
-      return buildLinkedInPrompt(rest);
-    case "shorts":
-      return buildShortsPrompt(rest);
-    default:
-      return buildTweetPrompt(rest);
-  }
 }
 
 function normalizeItems(
@@ -129,11 +102,11 @@ export async function POST(req: Request) {
     const { text } = await generateText({
       model: openai(MODEL),
       prompt,
+      temperature: parsed?.format === "shorts" ? 0.4 : 0.2,
     });
 
     let json: any = null;
     try {
-      // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
       let cleanedText = text.trim();
       const codeBlockMatch = new RegExp(
         /^```(?:json)?\s*([\s\S]*?)\s*```$/
@@ -142,16 +115,13 @@ export async function POST(req: Request) {
         cleanedText = codeBlockMatch[1];
       }
       json = JSON.parse(cleanedText);
-    } catch {
-      // fallback handled below
-    }
+    } catch {}
 
     const items = normalizeItems(json, parsed.format, parsed.tone);
     if (items.length) {
       return NextResponse.json({ items });
     }
 
-    // Fallback: single raw item
     const fallback: GeneratedContentItem = {
       id: "raw-1",
       format: parsed.format,

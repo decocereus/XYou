@@ -1,9 +1,10 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { useIngest } from "@/providers/IngestProvider";
-import { Card, Text, Progress } from "@whop/react/components";
+import { Card, Text } from "@whop/react/components";
 import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { ArrowDown20, Checkmark20, Copy20, Sparkle20 } from "@frosted-ui/icons";
 
 export function ProgressView() {
   const { status, progress, info, job } = useIngest();
@@ -25,103 +26,155 @@ export function ProgressView() {
   else if (progress?.totalBytes && progress?.bytes) {
     percentage = Math.round((progress.bytes / progress.totalBytes) * 100);
   } else if (isProcessing) {
-    // Fake progress for processing phase if no bytes
-    percentage = 95;
+    percentage = 95; // Fake progress
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -20 }}
-      className="w-full max-w-2xl mx-auto"
-    >
-      <Card
-        variant="classic"
-        size="4"
-        className="backdrop-blur-md bg-white/5 border border-white/10 shadow-xl overflow-hidden relative"
+    <div className="w-full max-w-lg mx-auto py-12">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+        className="relative"
       >
-        {/* Background Glow */}
-        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 animate-gradient-x" />
+        {/* Glow effect */}
+        <div className="absolute -inset-1 rounded-2xl bg-gradient-to-r from-blue-500/20 via-purple-500/20 to-pink-500/20 blur-xl" />
 
-        <div className="space-y-6 p-2">
-          <div className="flex items-center justify-center">
-            <div className="flex flex-col items-center justify-center gap-y-2">
-              <Text size="4" weight="semi-bold" className="text-white">
-                {isComplete ? "Analysis Complete" : `Processing Video${dots}`}
-              </Text>
-              <Text size="2" color="gray">
-                {info?.title || "Fetching video details..."}
-              </Text>
-            </div>
-            {isComplete && (
-              <div className="h-8 w-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-400">
-                ✓
+        <Card
+          size="4"
+          className="relative overflow-hidden border-white/10 bg-black/40 backdrop-blur-xl"
+        >
+          <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
+
+          <div className="relative space-y-8 p-2">
+            <div className="text-center space-y-2">
+              <div className="flex items-center justify-center mb-6">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-blue-500/20 blur-xl rounded-full" />
+                  <div className="relative h-16 w-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
+                    {isComplete ? (
+                      <Checkmark20 className="w-8 h-8 text-white" />
+                    ) : (
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{
+                          duration: 3,
+                          repeat: Infinity,
+                          ease: "linear",
+                        }}
+                      >
+                        <Sparkle20 className="w-8 h-8 text-white/90" />
+                      </motion.div>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
 
-          <div className="flex flex-col items-center gap-y-2">
-            <div className="flex  items-center gap-x-3 text-xs text-gray-400 uppercase tracking-wider">
-              <span>Progress</span>
-              <span>{percentage}%</span>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                key={isComplete ? "complete" : "processing"}
+              >
+                <Text size="4" weight="bold" className="text-white">
+                  {isComplete ? "Ready for Content" : "Analyzing Video"}
+                </Text>
+                <Text size="2" className="text-white/60 mt-1 block">
+                  {info?.title || "Preparing your workspace..."}
+                </Text>
+              </motion.div>
             </div>
-            {/* Custom Progress Bar for more control if needed, but Whop's is fine */}
-            <Progress
-              value={percentage}
-              max={100}
-              size="2"
-              color={isComplete ? "green" : "blue"}
-              className="h-2 rounded-full"
-            />
-          </div>
 
-          <div className="grid grid-cols-3 gap-4 pt-4 border-t border-white/5">
-            <StatusItem
-              label="Download"
-              active={!!progress?.bytes}
-              completed={!isProcessing && !!job}
-            />
-            <StatusItem
-              label="Transcribe"
-              active={isProcessing}
-              completed={!!job?.transcript?.segments?.length}
-            />
-            <StatusItem
-              label="Analyze"
-              active={isProcessing}
-              completed={isComplete}
-            />
+            <div className="space-y-3">
+              <div className="flex justify-between text-xs font-medium text-white/50 uppercase tracking-wider px-1">
+                <span>Progress</span>
+                <span>{percentage}%</span>
+              </div>
+              <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${percentage}%` }}
+                  transition={{ duration: 0.5 }}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <StatusStep
+                icon={ArrowDown20}
+                label="Download"
+                status={!!progress?.bytes ? "completed" : "active"}
+              />
+              <StatusStep
+                icon={Copy20}
+                label="Transcribe"
+                status={
+                  job?.transcript?.segments?.length
+                    ? "completed"
+                    : isProcessing
+                    ? "active"
+                    : "pending"
+                }
+              />
+              <StatusStep
+                icon={Sparkle20}
+                label="Analyze"
+                status={
+                  isComplete
+                    ? "completed"
+                    : isProcessing
+                    ? "pending"
+                    : "pending"
+                }
+              />
+            </div>
           </div>
-        </div>
-      </Card>
-    </motion.div>
+        </Card>
+      </motion.div>
+    </div>
   );
 }
 
-function StatusItem({
+function StatusStep({
+  icon: Icon,
   label,
-  active,
-  completed,
+  status,
 }: Readonly<{
+  icon: any;
   label: string;
-  active: boolean;
-  completed: boolean;
+  status: "pending" | "active" | "completed";
 }>) {
-  const completedText = completed ? "text-green-400" : "text-gray-600";
-  const completedBg = completed ? "bg-green-400" : "bg-gray-700";
+  const isCompleted = status === "completed";
+  const isActive = status === "active";
+
   return (
     <div
-      className={`flex flex-col items-center gap-2 transition-colors ${
-        active ? "text-blue-400" : completedText
-      }`}
+      className={`
+      flex flex-col items-center gap-3 p-3 rounded-xl transition-all duration-300
+      ${isActive ? "bg-white/10 ring-1 ring-white/20" : "bg-transparent"}
+    `}
     >
       <div
-        className={`w-3 h-3 rounded-full ${
-          active ? "bg-blue-400 animate-pulse" : completedBg
+        className={`
+        p-2 rounded-full transition-colors duration-300
+        ${
+          isCompleted
+            ? "bg-green-500/20 text-green-400"
+            : isActive
+            ? "bg-blue-500/20 text-blue-400"
+            : "bg-white/5 text-white/20"
+        }
+      `}
+      >
+        <Icon className="w-4 h-4" />
+      </div>
+      <span
+        className={`text-xs font-medium transition-colors ${
+          isActive || isCompleted ? "text-white/90" : "text-white/40"
         }`}
-      />
-      <span className="text-xs font-medium">{label}</span>
+      >
+        {label}
+      </span>
     </div>
   );
 }

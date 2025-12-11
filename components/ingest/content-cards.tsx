@@ -6,7 +6,6 @@ import {
   ContentFormat,
   GeneratedContentItem,
   contentFormatCharLimit,
-  contentFormatLabels,
 } from "@/lib/content-types";
 import { Copy20, ShareNodes20, Sparkle20 } from "@frosted-ui/icons";
 import { toast } from "sonner";
@@ -16,13 +15,6 @@ type ContentCardsProps = {
   onRegenerate?: (id: string) => Promise<void> | void;
   onRefine?: (text: string) => void;
   disabled?: boolean;
-};
-
-const formatAccent: Record<ContentFormat, string> = {
-  tweet: "text-blue-300 bg-blue-500/10",
-  thread: "text-purple-300 bg-purple-500/10",
-  linkedin: "text-sky-300 bg-sky-500/10",
-  shorts: "text-pink-300 bg-pink-500/10",
 };
 
 export function ContentCards({
@@ -57,10 +49,10 @@ export function ContentCards({
       <Card
         variant="classic"
         size="3"
-        className="border border-dashed border-white/10 bg-white/5 backdrop-blur-xl"
+        className="border border-dashed border-gray-200 dark:border-gray-800"
       >
-        <div className="text-center  flex flex-col items-center gap-y-3 py-3">
-          <Text weight="semi-bold" className="text-white">
+        <div className="text-center flex flex-col items-center gap-y-3 py-3">
+          <Text weight="semi-bold">
             No content generated yet
           </Text>
           <Text size="2" color="gray">
@@ -117,10 +109,10 @@ function ContentCard({
 
   return (
     <Card variant="classic" size="1">
-      <div className="flex items-start justify-between gap-3 p-4 border-b border-white/5">
+      <div className="flex items-start justify-between gap-3 p-4 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center gap-2">
           {item.tone && (
-            <span className="text-xs text-3 uppercase text-white-surface">
+            <span className="text-xs font-medium uppercase text-gray-500">
               {item.tone}
             </span>
           )}
@@ -187,17 +179,17 @@ function ThreadRow({
     <div className="flex gap-3">
       {index !== undefined && (
         <div className="mt-1">
-          <span className="text-xs text-gray-400 font-semibold">{index}.</span>
+          <span className="text-xs text-gray-500 font-semibold">{index}.</span>
         </div>
       )}
       <div className="flex-1 space-y-1">
-        <Text className="text-white leading-relaxed whitespace-pre-wrap">
+        <Text className="leading-relaxed whitespace-pre-wrap">
           {text}
         </Text>
         {charLimit && (
           <Text
             size="1"
-            className={overLimit ? "text-red-300" : "text-gray-400"}
+            className={overLimit ? "text-red-500" : "text-gray-400"}
           >
             {length}/{charLimit} characters
           </Text>
